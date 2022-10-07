@@ -122,13 +122,22 @@ class Node {
         return new SplitResult(this, new_right, new_root, promoted_key);
     }
 
+    auto InsertSafe(const T& key) -> bool {
+        if (Contains(key)) return false;
+        auto insert_at = FindIndex(key);
+        keys_.insert(keys_.begin() + insert_at, key);
+        return true;
+    }
+
     auto Scannode(const T& key) -> K* {
         auto index = FindIndex(key);
         if (index == keys_.size() && right_link_ != nullptr) return right_link_;
         return children_[index];
     }
 
-    inline auto IsSafe() -> bool { return false; }
+    inline auto IsSafe() -> bool {
+        return keys_.size() > min_order_ && keys_.size() < 2 * min_order_;
+    }
 
     inline auto Contains(const T& key) -> bool {
         auto index = FindIndex(key);
@@ -197,11 +206,21 @@ class Tree {
             current = static_cast<Node<T, K>*>(current->Scannode(key));
             if (current != t->right_link_) anc_stack.push(t);
         }
-        Node<T, K>::MoveRight(current, key);
-        return false;
+        current = Node<T, K>::MoveRight(current, key);
+        if (current->Contains(key)) {
+            std::cout << "Key already exists in tree" << std::endl;
+            return false;
+        }
+        return Insert(current, key, val, anc_stack);
     }
 
    private:
+    auto Insert(Node<T, K>* current, const T& key, const K& val,
+                std::stack<Node<T, K>*> anc_stack) {
+        if (current->IsSafe()) {
+            current->InsertSafe(key);
+        }
+    }
     Node<T, K>* root_;
 };
 
