@@ -1,4 +1,2 @@
-bazel-bin/
-bazel-memorytree/
-bazel-out/
-bazel-testlogs/
+build/
+bazel-*/
