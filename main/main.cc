@@ -160,6 +160,7 @@ class Node {
         new_right->SetKeys(right_half_keys);
         // update current node keys
         SetKeys(left_half_keys);
+        new_right->SetLeaf(leaf_);
         // init potential new root
         Node* new_root = nullptr;
         if (root_) {
@@ -170,6 +171,7 @@ class Node {
             auto new_root_children = std::vector<void*>{this, new_right};
             new_root->SetKeys(new_root_keys);
             new_root->SetChildren(new_root_children);
+            new_root->SetRoot(true);
         }
         if (leaf_)
             return new SplitResult(this, new_right, new_root, promoted_key);
@@ -295,17 +297,28 @@ class Tree {
     auto Unlatch() { latch_.unlock(); }
 
     auto Insert(const T& key, const K& val) -> bool {
+        // initialize stack
         auto anc_stack = std::stack<Node<T, K>*>{};
         auto current = root_;
+        // if the root is null then just create a new node, insert the key, and
+        // assign it to this tree's root_ property
         if (current == nullptr) {
+            // latch the tree with a lock guard
             std::lock_guard<std::mutex> lk{latch_};
             root_ = new Node<T, K>(min_order_);
             auto keys = std::vector<T>{key};
             root_->SetKeys(keys);
+            root_->SetRoot(true);
+            // latch is destroyed at the end of this scope
+            return true;
         }
+
+        // continue until we hit a leaf
         while (!current->IsLeaf()) {
             auto t = current;
             current = static_cast<Node<T, K>*>(current->Scannode(key));
+            // we only want to push the rightmost node at each level onto the
+            // stack, so if
             if (current != t->right_link_) anc_stack.push(t);
         }
         current = Node<T, K>::MoveRight(current, key);
@@ -327,6 +340,7 @@ class Tree {
         // unlatch it without deadlock
         if (current->IsSafe()) {
             current->InsertSafe(key);
+            // unlatch and return. we're done if the node we've reached is safe.
             current->Unlatch();
             return true;
         }
